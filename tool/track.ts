@@ -201,7 +201,8 @@ export default tool({
 
       if (action === "list") {
         const store = await readStore(context.sessionID)
-        return render(store.items)
+        if (store.items.length === 0) return "(empty)"
+        return `${render(store.items)}\n(${counts(store.items)})`
       }
 
        if (action === "remove") {

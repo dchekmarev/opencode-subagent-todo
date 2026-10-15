@@ -22,7 +22,7 @@ after(async () => {
 
 test("add/list/start/done flow emits only changed lines", async () => {
   assert.match(await run("add", { items: ["a", "b", "c"] }, "ses_flow"), /added #1-3 \(0\/3 done\)/)
-  assert.equal(await run("list", {}, "ses_flow"), "#1 [ ] a\n#2 [ ] b\n#3 [ ] c")
+  assert.equal(await run("list", {}, "ses_flow"), "#1 [ ] a\n#2 [ ] b\n#3 [ ] c\n(0/3 done)")
   assert.equal(await run("done", { id: 2 }, "ses_flow"), "#2 [x] b (1/3 done)")
   assert.equal(await run("start", { id: 3 }, "ses_flow"), "#3 [.] c (1/3 done, 1 doing)")
 })
@@ -34,7 +34,7 @@ test("serializes concurrent mutations (no lost updates)", async () => {
     run("done", { id: 2 }, "ses_race"),
     run("done", { id: 3 }, "ses_race"),
   ])
-  assert.equal(await run("list", {}, "ses_race"), "#1 [x] a\n#2 [x] b\n#3 [x] c")
+  assert.equal(await run("list", {}, "ses_race"), "#1 [x] a\n#2 [x] b\n#3 [x] c\n(3/3 done)")
 })
 
 test("serializes concurrent adds in call order", async () => {
@@ -43,12 +43,26 @@ test("serializes concurrent adds in call order", async () => {
     run("add", { text: "q" }, "ses_race_add"),
     run("add", { text: "r" }, "ses_race_add"),
   ])
-  assert.equal(await run("list", {}, "ses_race_add"), "#1 [ ] p\n#2 [ ] q\n#3 [ ] r")
+  assert.equal(await run("list", {}, "ses_race_add"), "#1 [ ] p\n#2 [ ] q\n#3 [ ] r\n(0/3 done)")
 })
 
 test("state is isolated per session", async () => {
   await run("add", { text: "only-a" }, "ses_a")
   assert.equal(await run("list", {}, "ses_b"), "(empty)")
+})
+
+test("list of a non-empty checklist ends with the counts summary line", async () => {
+  await run("add", { items: ["a", "b", "c"] }, "ses_summary")
+  await run("done", { id: 1 }, "ses_summary")
+  await run("start", { id: 3 }, "ses_summary")
+  assert.equal(
+    await run("list", {}, "ses_summary"),
+    "#1 [x] a\n#2 [ ] b\n#3 [.] c\n(1/3 done, 1 doing)",
+  )
+})
+
+test("list of an empty checklist is exactly (empty)", async () => {
+  assert.equal(await run("list", {}, "ses_empty_summary"), "(empty)")
 })
 
 test("clear resets the session", async () => {
@@ -83,7 +97,7 @@ test("clear resets the session", async () => {
    assert.equal(d, "#2 [x] new b (1/3 done, 1 doing)")
    const s = await run("edit", { id: 3, text: "new c" }, "ses_edit")
    assert.equal(s, "#3 [.] new c (1/3 done, 1 doing)")
-   assert.equal(await run("list", {}, "ses_edit"), "#1 [ ] new a\n#2 [x] new b\n#3 [.] new c")
+   assert.equal(await run("list", {}, "ses_edit"), "#1 [ ] new a\n#2 [x] new b\n#3 [.] new c\n(1/3 done, 1 doing)")
  })
 
  test("edit of unknown id throws", async () => {
@@ -125,7 +139,7 @@ test("start resets any other doing item to todo and reports reset", async () => 
   await run("start", { id: 1 }, "ses_single_doing")
   const res = await run("start", { id: 2 }, "ses_single_doing")
   assert.equal(res, "#2 [.] b (0/2 done, 1 doing; reset #1 to todo)")
-  assert.equal(await run("list", {}, "ses_single_doing"), "#1 [ ] a\n#2 [.] b")
+  assert.equal(await run("list", {}, "ses_single_doing"), "#1 [ ] a\n#2 [.] b\n(0/2 done, 1 doing)")
 })
 
 test("only one item remains doing after reset", async () => {

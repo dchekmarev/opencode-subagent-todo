@@ -86,15 +86,16 @@ Other subagents (e.g. `general`, or any custom agent) receive `track` by default
 | `add`      | `text` or `items` | appends todo(s) `[ ]`; prints only the added line(s)          |
 | `start`/`doing` | `id`       | sets item in-progress `[.]`; at most one item can be in `doing` state at a time (if another is `doing`, it is reset to `todo` and the reset is reported in the output; starting an already `doing` item is idempotent); prints only that line |
 | `done`     | `id`            | marks the item done `[x]`; prints only that line              |
-| `list`     | —               | prints the full checklist `#id [marker] text` (or `(empty)`)  |
+| `list`     | —               | prints the full checklist `#id [marker] text` followed by a `(done/total done…)` progress summary line, or `(empty)` when there are no items |
 | `clear`    | —               | deletes the session's list; prints `cleared`                  |
 | `remove`   | `id`            | removes item; returns confirmation + full renumbered list     |
 | `edit`     | `id`, `text`    | changes text preserving status; returns changed line          |
 
 Mutations return **only the changed line(s)** (plus a progress count) so the checklist
 is never duplicated in the model's context. Call `list` when you need the full state
-(e.g. to reorient, or after a context compaction). Passing `items: string[]` to `add`
-creates several steps in a single call.
+(e.g. to reorient, or after a context compaction); it appends a progress summary line
+(e.g. `(1/3 done, 1 doing)`) after the checklist, or prints `(empty)` when the list has
+no items. Passing `items: string[]` to `add` creates several steps in a single call.
 
 ## Development
 
