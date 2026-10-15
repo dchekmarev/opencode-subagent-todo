@@ -10,8 +10,10 @@ chat burns context on every turn and is easy to get wrong.
 This project provides a lightweight alternative:
 
 - **`track` tool** — a small, deterministic checklist stored **per session**, so lists
-  never leak between sessions and cost no context to keep. The model only sends
-  deltas (`add` / `done` by id) and never has to restate the whole list.
+  never leak between sessions and cost no context between calls. The model only sends
+  deltas (`add` / `done` by id) and never has to restate the whole list: every update
+  echoes the current checklist back in the tool result, so the state is always visible
+  in the conversation.
 - **`opencode-todo` plugin** — appends a short system-prompt note to **every**
   session telling the model to prefer `todowrite` when it is available, and to fall
   back to `track` otherwise (i.e. as a subagent).
@@ -73,12 +75,16 @@ Other subagents (e.g. `general`, or any custom agent) receive `track` by default
 
 `track(action, text?, id?)`
 
-| action  | args            | result                                                       |
-| ------- | --------------- | ------------------------------------------------------------ |
-| `add`   | `text`          | appends an item, returns its `#id`                           |
-| `done`  | `id`            | marks the item complete, returns progress and the next item  |
-| `list`  | —               | prints the checklist with `[x]` / `[ ]` marks                |
-| `clear` | —               | deletes the session's list                                   |
+| action     | args            | result                                                        |
+| ---------- | --------------- | ------------------------------------------------------------- |
+| `add`      | `text`          | appends a todo `[ ]` and prints the checklist (#id [marker] text) |
+| `start`/`doing` | `id`      | sets item in-progress `[.]` and prints the checklist         |
+| `done`     | `id`            | marks the item complete `[x]` and prints the checklist       |
+| `list`     | —               | prints the checklist (or `(empty)`)                          |
+| `clear`    | —               | deletes the session's list and prints `(empty)`               |
+
+Every action echoes the current checklist, so the state is always visible in the
+conversation without the model re-emitting it.
 
 ## Layout
 
