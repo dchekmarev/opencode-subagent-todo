@@ -7,6 +7,14 @@ type Item = { text: string; status: "todo" | "doing" | "done" }
 type Store = { items: Item[] }
 
 const TTL_MS = 7 * 24 * 60 * 60 * 1000
+const PRUNE_INTERVAL_MS = 10 * 60 * 1000
+
+let lastPruneMs = 0
+let storeDirReady: string | null = null
+
+export function __resetPruneThrottle(): void {
+  lastPruneMs = 0
+}
 
 function storeDir(): string {
   const dataHome = process.env.XDG_DATA_HOME ?? path.join(os.homedir(), ".local", "share")
@@ -76,6 +84,8 @@ async function readStore(sessionID: string): Promise<Store> {
 }
 
 async function prune(now = Date.now()): Promise<void> {
+  if (now - lastPruneMs < PRUNE_INTERVAL_MS) return
+  lastPruneMs = now
   const dir = storeDir()
   let entries: string[]
   try {
@@ -96,7 +106,11 @@ async function prune(now = Date.now()): Promise<void> {
 }
 
 async function writeStore(sessionID: string, store: Store): Promise<void> {
-  await fs.mkdir(storeDir(), { recursive: true })
+  const dir = storeDir()
+  if (storeDirReady !== dir) {
+    await fs.mkdir(dir, { recursive: true })
+    storeDirReady = dir
+  }
   const file = storeFile(sessionID)
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`
   await fs.writeFile(tmp, JSON.stringify(store, null, 2), "utf8")

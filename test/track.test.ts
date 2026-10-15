@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { promises as fs } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import track from "../tool/track.ts"
+import track, { __resetPruneThrottle } from "../tool/track.ts"
 
 let dataHome: string
 const dir = () => path.join(dataHome, "opencode", "agent-todos")
@@ -126,12 +126,40 @@ test("moves an unreadable store aside instead of wiping it", async () => {
 
 test("prunes session files older than the TTL", async () => {
   await fs.mkdir(dir(), { recursive: true })
+  __resetPruneThrottle()
   const stale = path.join(dir(), "ses_stale.json")
   await fs.writeFile(stale, JSON.stringify({ items: [] }))
   const past = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
   await fs.utimes(stale, past, past)
   await run("add", { text: "trigger prune" }, "ses_fresh")
   assert.ok(!(await fs.readdir(dir())).includes("ses_stale.json"))
+})
+
+test("does not prune again within the throttle window", async () => {
+  await fs.mkdir(dir(), { recursive: true })
+  __resetPruneThrottle()
+  await run("add", { text: "trigger prune" }, "ses_throttle_a")
+  const stale = path.join(dir(), "ses_throttle_stale.json")
+  await fs.writeFile(stale, JSON.stringify({ items: [] }))
+  const past = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+  await fs.utimes(stale, past, past)
+  await run("add", { text: "no prune" }, "ses_throttle_b")
+  assert.ok((await fs.readdir(dir())).includes("ses_throttle_stale.json"))
+})
+
+test("creates the store dir again when XDG_DATA_HOME changes", async () => {
+  const alt = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-todo-alt-"))
+  const prev = process.env.XDG_DATA_HOME
+  try {
+    process.env.XDG_DATA_HOME = alt
+    await run("add", { text: "writes into the new dir" }, "ses_alt_home")
+    const names = await fs.readdir(path.join(alt, "opencode", "agent-todos"))
+    assert.ok(names.includes("ses_alt_home.json"))
+  } finally {
+    if (prev === undefined) delete process.env.XDG_DATA_HOME
+    else process.env.XDG_DATA_HOME = prev
+    await fs.rm(alt, { recursive: true, force: true })
+  }
 })
 
 test("start resets any other doing item to todo and reports reset", async () => {
