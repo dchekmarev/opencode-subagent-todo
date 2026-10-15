@@ -11,9 +11,10 @@ This project provides a lightweight alternative:
 
 - **`track` tool** — a small, deterministic checklist stored **per session**, so lists
   never leak between sessions and cost no context between calls. The model only sends
-  deltas (`add` / `done` by id) and never has to restate the whole list: every update
-  echoes the current checklist back in the tool result, so the state is always visible
-  in the conversation.
+  deltas (`add` / `done` by id) and does not restate the whole list. Mutations return
+  **only the changed line(s)**, and the full checklist is available on demand via
+  `list` — so a long plan does not get duplicated in the context on every step. Steps
+  can also be added in one call (`items: [...]`).
 - **`opencode-todo` plugin** — appends a short system-prompt note to **every**
   session telling the model to prefer `todowrite` when it is available, and to fall
   back to `track` otherwise (i.e. as a subagent).
@@ -73,18 +74,20 @@ Other subagents (e.g. `general`, or any custom agent) receive `track` by default
 
 ## Tool reference
 
-`track(action, text?, id?)`
+`track(action, text?, items?, id?)`
 
-| action     | args            | result                                                        |
-| ---------- | --------------- | ------------------------------------------------------------- |
-| `add`      | `text`          | appends a todo `[ ]` and prints the checklist (#id [marker] text) |
-| `start`/`doing` | `id`      | sets item in-progress `[.]` and prints the checklist         |
-| `done`     | `id`            | marks the item complete `[x]` and prints the checklist       |
-| `list`     | —               | prints the checklist (or `(empty)`)                          |
-| `clear`    | —               | deletes the session's list and prints `(empty)`               |
+| action     | args            | result                                                          |
+| ---------- | --------------- | --------------------------------------------------------------- |
+| `add`      | `text` or `items` | appends todo(s) `[ ]`; prints only the added line(s)          |
+| `start`/`doing` | `id`       | sets item in-progress `[.]`; prints only that line            |
+| `done`     | `id`            | marks the item done `[x]`; prints only that line              |
+| `list`     | —               | prints the full checklist `#id [marker] text` (or `(empty)`)  |
+| `clear`    | —               | deletes the session's list; prints `cleared`                  |
 
-Every action echoes the current checklist, so the state is always visible in the
-conversation without the model re-emitting it.
+Mutations return **only the changed line(s)** (plus a progress count) so the checklist
+is never duplicated in the model's context. Call `list` when you need the full state
+(e.g. to reorient, or after a context compaction). Passing `items: string[]` to `add`
+creates several steps in a single call.
 
 ## Layout
 

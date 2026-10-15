@@ -54,18 +54,29 @@ function render(items: Item[]): string {
     .join("\n")
 }
 
+function counts(items: Item[]): string {
+  const done = items.filter((entry) => entry.status === "done").length
+  const doing = items.filter((entry) => entry.status === "doing").length
+  return `${done}/${items.length} done${doing ? `, ${doing} doing` : ""}`
+}
+
 export default tool({
   description:
     "Per-session task checklist for tracking your own plan without spending context re-emitting it. " +
     "States: [ ] todo, [.] in-progress (doing), [x] done. " +
-    "Use 'add' to add todo, 'start'/'doing' to set in-progress, 'done' to finish, 'list' to reorient, 'clear' to reset. " +
-    "Every call prints the current checklist (format: #id [marker] text) so never restate the list in chat. " +
+    "Use 'add' to add todo(s) (pass 'items' array to add several at once), 'start'/'doing' to set in-progress, " +
+    "'done' to finish, 'list' to reorient, 'clear' to reset. " +
+    "Mutations print ONLY the changed line(s) to avoid duplicating the list in context; call 'list' when you need the full checklist. " +
     "State is isolated to this agent's own session (not shared with the parent or sibling agents).",
   args: {
     action: tool.schema
       .enum(["add", "start", "doing", "done", "list", "clear"])
       .describe("Operation to perform"),
-    text: tool.schema.string().optional().describe("Item text (required for 'add')"),
+    text: tool.schema.string().optional().describe("Single item text (for 'add')"),
+    items: tool.schema
+      .array(tool.schema.string())
+      .optional()
+      .describe("Multiple item texts to add at once (for 'add')"),
     id: tool.schema
       .number()
       .int()
@@ -73,13 +84,17 @@ export default tool({
       .optional()
       .describe("Item id (required for 'start'/'doing'/'done')"),
   },
-  async execute({ action, text, id }, context) {
+  async execute({ action, text, items, id }, context) {
     if (action === "add") {
-      if (!text) return "error: text is required for add"
+      const toAdd = items && items.length > 0 ? items : text ? [text] : []
+      if (toAdd.length === 0) return "error: 'text' or 'items' is required for add"
       const store = await readStore(context.sessionID)
-      store.items.push({ text, status: "todo" })
+      const first = store.items.length + 1
+      for (const entry of toAdd) store.items.push({ text: entry, status: "todo" })
       await writeStore(context.sessionID, store)
-      return `added #${store.items.length} "${text}"\n${render(store.items)}`
+      if (toAdd.length === 1) return `added #${first} [ ] ${toAdd[0]} (${counts(store.items)})`
+      const lines = toAdd.map((entry, i) => `#${first + i} [ ] ${entry}`).join("\n")
+      return `added #${first}-${store.items.length} (${counts(store.items)})\n${lines}`
     }
 
     if (action === "start" || action === "doing") {
@@ -89,9 +104,7 @@ export default tool({
       if (!item) return `error: no item #${id}`
       item.status = "doing"
       await writeStore(context.sessionID, store)
-      const doing = store.items.filter((entry) => entry.status === "doing").length
-      const done = store.items.filter((entry) => entry.status === "done").length
-      return `started #${id} "${item.text}" (doing:${doing} done:${done}/${store.items.length})\n${render(store.items)}`
+      return `#${id} [.] ${item.text} (${counts(store.items)})`
     }
 
     if (action === "done") {
@@ -101,8 +114,7 @@ export default tool({
       if (!item) return `error: no item #${id}`
       item.status = "done"
       await writeStore(context.sessionID, store)
-      const done = store.items.filter((entry) => entry.status === "done").length
-      return `done #${id} "${item.text}" (${done}/${store.items.length})\n${render(store.items)}`
+      return `#${id} [x] ${item.text} (${counts(store.items)})`
     }
 
     if (action === "list") {
@@ -111,6 +123,6 @@ export default tool({
     }
 
     await fs.rm(storeFile(context.sessionID), { force: true })
-    return "cleared\n(empty)"
+    return "cleared"
   },
 })
