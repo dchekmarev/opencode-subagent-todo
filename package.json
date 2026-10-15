@@ -1,6 +1,6 @@
 {
   "name": "opencode-subagent-todo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Per-session task tracking for opencode subagents: a `track` tool plus a plugin that tells every session to use it when `todowrite` is unavailable.",
   "type": "module",
   "license": "MIT",
