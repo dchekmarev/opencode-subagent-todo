@@ -1,0 +1,24 @@
+{
+  "name": "opencode-todo",
+  "version": "0.1.0",
+  "description": "Per-session task tracking for opencode subagents: a `track` tool plus a plugin that tells every session to use it when `todowrite` is unavailable.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Dmitriy Chekmarev",
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "todo",
+    "subagent"
+  ],
+  "files": [
+    "tool",
+    "plugins",
+    "install.sh",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@opencode-ai/plugin": "1.4.7"
+  }
+}
