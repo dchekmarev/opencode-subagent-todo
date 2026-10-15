@@ -11,8 +11,14 @@ function storeDir(): string {
   return path.join(dataHome, "opencode", "agent-todos")
 }
 
+function safeId(sessionID: string): string {
+  const safe = sessionID.replace(/[^A-Za-z0-9._-]/g, "_")
+  if (safe === "" || safe === "." || safe === "..") return "session"
+  return safe
+}
+
 function storeFile(sessionID: string): string {
-  return path.join(storeDir(), `${sessionID}.json`)
+  return path.join(storeDir(), `${safeId(sessionID)}.json`)
 }
 
 function migrateItem(item: any): Item {
@@ -27,13 +33,25 @@ function migrateItem(item: any): Item {
 }
 
 async function readStore(sessionID: string): Promise<Store> {
+  const file = storeFile(sessionID)
+  let raw: string
   try {
-    const parsed = JSON.parse(await fs.readFile(storeFile(sessionID), "utf8"))
+    raw = await fs.readFile(file, "utf8")
+  } catch (error: any) {
+    if (error?.code === "ENOENT") return { items: [] }
+    throw new Error(`track: cannot read ${file}: ${error?.message ?? error}`)
+  }
+  try {
+    const parsed = JSON.parse(raw)
     if (parsed && Array.isArray(parsed.items)) {
       return { items: parsed.items.map(migrateItem) }
     }
-  } catch {}
-  return { items: [] }
+    throw new Error("unexpected store shape")
+  } catch (error: any) {
+    // Preserve the unreadable file instead of silently overwriting it on the next write.
+    await fs.rename(file, `${file}.corrupt-${Date.now()}`).catch(() => {})
+    return { items: [] }
+  }
 }
 
 async function writeStore(sessionID: string, store: Store): Promise<void> {
@@ -87,7 +105,7 @@ export default tool({
   async execute({ action, text, items, id }, context) {
     if (action === "add") {
       const toAdd = items && items.length > 0 ? items : text ? [text] : []
-      if (toAdd.length === 0) return "error: 'text' or 'items' is required for add"
+      if (toAdd.length === 0) throw new Error("track: 'text' or 'items' is required for 'add'")
       const store = await readStore(context.sessionID)
       const first = store.items.length + 1
       for (const entry of toAdd) store.items.push({ text: entry, status: "todo" })
@@ -98,20 +116,20 @@ export default tool({
     }
 
     if (action === "start" || action === "doing") {
-      if (typeof id !== "number") return "error: numeric id is required for start/doing"
+      if (typeof id !== "number") throw new Error("track: numeric id is required for 'start'/'doing'")
       const store = await readStore(context.sessionID)
       const item = store.items[id - 1]
-      if (!item) return `error: no item #${id}`
+      if (!item) throw new Error(`track: no item #${id}`)
       item.status = "doing"
       await writeStore(context.sessionID, store)
       return `#${id} [.] ${item.text} (${counts(store.items)})`
     }
 
     if (action === "done") {
-      if (typeof id !== "number") return "error: numeric id is required for done"
+      if (typeof id !== "number") throw new Error("track: numeric id is required for 'done'")
       const store = await readStore(context.sessionID)
       const item = store.items[id - 1]
-      if (!item) return `error: no item #${id}`
+      if (!item) throw new Error(`track: no item #${id}`)
       item.status = "done"
       await writeStore(context.sessionID, store)
       return `#${id} [x] ${item.text} (${counts(store.items)})`
