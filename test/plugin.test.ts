@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import plugin from "../plugins/opencode-todo.ts"
+import plugin from "../plugins/opencode-subagent-todo.ts"
 
 const HINT_MATCH = /use `todowrite` when it is available.*`track`/
 
@@ -24,6 +24,11 @@ async function transform(hooks: Awaited<ReturnType<typeof hooksWith>>, sessionID
   await hook({ sessionID } as never, output)
   return output.system
 }
+
+test("registers the `track` tool", async () => {
+  const hooks = await hooksWith({})
+  assert.ok(hooks.tool?.track, "plugin should expose the track tool")
+})
 
 test("primary session (no parent) gets no hint", async () => {
   const hooks = await hooksWith({})

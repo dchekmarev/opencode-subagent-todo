@@ -1,16 +1,27 @@
 {
-  "name": "opencode-todo",
+  "name": "opencode-subagent-todo",
   "version": "0.1.0",
   "description": "Per-session task tracking for opencode subagents: a `track` tool plus a plugin that tells every session to use it when `todowrite` is unavailable.",
   "type": "module",
   "license": "MIT",
   "author": "Dmitriy Chekmarev",
+  "homepage": "https://github.com/dchekmarev/opencode-subagent-todo#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dchekmarev/opencode-subagent-todo.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dchekmarev/opencode-subagent-todo/issues"
+  },
   "keywords": [
     "opencode",
     "opencode-plugin",
     "todo",
     "subagent"
   ],
+  "exports": {
+    ".": "./plugins/opencode-subagent-todo.ts"
+  },
   "files": [
     "tool",
     "plugins",
@@ -18,6 +29,9 @@
     "README.md",
     "LICENSE"
   ],
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --test test/track.test.ts test/plugin.test.ts"

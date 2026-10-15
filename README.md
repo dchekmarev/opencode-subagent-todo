@@ -1,4 +1,4 @@
-# opencode-todo
+# opencode-subagent-todo
 
 Per-session task tracking for [opencode](https://opencode.ai) subagents.
 
@@ -15,9 +15,10 @@ This project provides a lightweight alternative:
   **only the changed line(s)**, and the full checklist is available on demand via
   `list` — so a long plan does not get duplicated in the context on every step. Steps
   can also be added in one call (`items: [...]`).
-- **`opencode-todo` plugin** — appends a short system-prompt note to **every**
-  session telling the model to prefer `todowrite` when it is available, and to fall
-  back to `track` otherwise (i.e. as a subagent).
+- **`opencode-subagent-todo` plugin** — registers the `track` tool and appends a
+  short system-prompt note to **every** session telling the model to prefer
+  `todowrite` when it is available, and to fall back to `track` otherwise (i.e. as a
+  subagent).
 
 **What "session" means.** A session is one opencode agent run, not your chat window.
 Every subagent runs in its own session, so within a single conversation the primary
@@ -27,9 +28,9 @@ subagent gets a fresh, empty list.
 
 ## How it works
 
-- The `track` tool is a custom opencode tool. Custom tools are registered globally,
-  so every agent — including subagents at any nesting depth — receives it
-  automatically. No per-agent configuration is required.
+- The `track` tool is registered by the plugin, so every agent — including
+  subagents at any nesting depth — receives it automatically. No per-agent
+  configuration is required.
 - State lives in `$XDG_DATA_HOME/opencode/agent-todos/<sessionID>.json`
   (`~/.local/share/opencode/agent-todos/` by default), one file per session, written
   atomically. Files untouched for more than 7 days are pruned; an unreadable file is
@@ -43,11 +44,28 @@ subagent gets a fresh, empty list.
 
 ## Install
 
-Requires opencode 1.x. From a checkout of this repository:
+Requires opencode 1.x.
+
+### From npm (recommended)
+
+Add the package to the `plugin` array in your `opencode.json`; opencode installs it
+(and its dependencies) automatically at startup:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["opencode-subagent-todo"]
+}
+```
+
+That single package registers the `track` tool and the system-prompt hint — no repo
+checkout or file copying needed.
+
+### From a local checkout (development)
 
 ```sh
 npm install          # resolves @opencode-ai/plugin (for the tool's zod schema)
-./install.sh         # symlinks tool/ and plugins/ into ~/.opencode
+./install.sh         # symlinks the plugin into ~/.opencode
 ```
 
 `install.sh` links into `~/.opencode` by default. To target the XDG config directory
@@ -107,11 +125,12 @@ npm test             # node:test against tool/track.ts
 ## Layout
 
 ```
-tool/track.ts            the `track` custom tool
-plugins/opencode-todo.ts system-prompt hint plugin
-test/track.test.ts       unit tests
-install.sh               symlink installer
-tsconfig.json            typecheck config
+tool/track.ts                      the `track` tool (registered by the plugin)
+plugins/opencode-subagent-todo.ts  plugin entry: registers `track` + system-prompt hint
+test/track.test.ts                 unit tests
+test/plugin.test.ts                plugin tests
+install.sh                         symlink installer (local checkout)
+tsconfig.json                      typecheck config
 ```
 
 ## License

@@ -10,12 +10,18 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEST="${OPENCODE_DOTDIR:-$HOME/.opencode}"
 
-mkdir -p "$DEST/tool" "$DEST/plugins"
-ln -sfn "$REPO_DIR/tool/track.ts" "$DEST/tool/track.ts"
-ln -sfn "$REPO_DIR/plugins/opencode-todo.ts" "$DEST/plugins/opencode-todo.ts"
+mkdir -p "$DEST/plugins"
 
-echo "opencode-todo linked into:"
-echo "  $DEST/tool/track.ts -> $REPO_DIR/tool/track.ts"
-echo "  $DEST/plugins/opencode-todo.ts -> $REPO_DIR/plugins/opencode-todo.ts"
+# The `track` tool is now registered by the plugin, so only the plugin is linked.
+# Drop a standalone tool symlink left by older versions, otherwise `track` would
+# be registered twice. Never touch a non-symlink or a symlink we don't own.
+if [ -L "$DEST/tool/track.ts" ] && [ "$(readlink -f "$DEST/tool/track.ts" 2>/dev/null)" = "$REPO_DIR/tool/track.ts" ]; then
+  rm -f "$DEST/tool/track.ts"
+fi
+
+ln -sfn "$REPO_DIR/plugins/opencode-subagent-todo.ts" "$DEST/plugins/opencode-subagent-todo.ts"
+
+echo "opencode-subagent-todo linked into:"
+echo "  $DEST/plugins/opencode-subagent-todo.ts -> $REPO_DIR/plugins/opencode-subagent-todo.ts"
 echo
 echo "Restart opencode for the changes to take effect."
