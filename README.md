@@ -35,8 +35,11 @@ subagent gets a fresh, empty list.
   atomically. Files untouched for more than 7 days are pruned; an unreadable file is
   moved to `<name>.json.corrupt-<ts>` rather than silently overwritten.
 - The plugin adds a one-line `track` hint via `experimental.chat.system.transform`, but
-  skips it when the system prompt already mentions `todowrite` — so primary agents
-  (which have `todowrite`) do not pay for the note.
+  only for subagent sessions — it detects them by the session's parent id (subagent
+  sessions are created by the `task` tool and carry a `parentID`), so primary agents
+  (which have `todowrite`) do not pay for the note. The hint is worded to be correct
+  either way ("use `todowrite` when available, otherwise `track`"), and the lookup is
+  cached per session and fails open.
 
 ## Install
 

@@ -27,6 +27,25 @@ test("add/list/start/done flow emits only changed lines", async () => {
   assert.equal(await run("start", { id: 3 }, "ses_flow"), "#3 [.] c (1/3 done, 1 doing)")
 })
 
+test("serializes concurrent mutations (no lost updates)", async () => {
+  await run("add", { items: ["a", "b", "c"] }, "ses_race")
+  await Promise.all([
+    run("done", { id: 1 }, "ses_race"),
+    run("done", { id: 2 }, "ses_race"),
+    run("done", { id: 3 }, "ses_race"),
+  ])
+  assert.equal(await run("list", {}, "ses_race"), "#1 [x] a\n#2 [x] b\n#3 [x] c")
+})
+
+test("serializes concurrent adds in call order", async () => {
+  await Promise.all([
+    run("add", { text: "p" }, "ses_race_add"),
+    run("add", { text: "q" }, "ses_race_add"),
+    run("add", { text: "r" }, "ses_race_add"),
+  ])
+  assert.equal(await run("list", {}, "ses_race_add"), "#1 [ ] p\n#2 [ ] q\n#3 [ ] r")
+})
+
 test("state is isolated per session", async () => {
   await run("add", { text: "only-a" }, "ses_a")
   assert.equal(await run("list", {}, "ses_b"), "(empty)")

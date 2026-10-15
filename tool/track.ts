@@ -23,6 +23,25 @@ function storeFile(sessionID: string): string {
   return path.join(storeDir(), `${safeId(sessionID)}.json`)
 }
 
+// opencode issues independent tool calls in parallel, so two `track` mutations can
+// read-modify-write the same session file at once and clobber each other. Serialize
+// every operation on a given store file through a per-key promise chain.
+const locks = new Map<string, Promise<unknown>>()
+
+function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prior = locks.get(key) ?? Promise.resolve()
+  const run = prior.then(fn)
+  const tail = run.then(
+    () => {},
+    () => {},
+  )
+  locks.set(key, tail)
+  void tail.then(() => {
+    if (locks.get(key) === tail) locks.delete(key)
+  })
+  return run
+}
+
 function migrateItem(item: any): Item {
   if (!item || typeof item !== "object") return { text: String(item ?? ""), status: "todo" }
   if (item.status === "todo" || item.status === "doing" || item.status === "done") {
@@ -125,45 +144,47 @@ export default tool({
       .optional()
       .describe("Item id (required for 'start'/'doing'/'done')"),
   },
-  async execute({ action, text, items, id }, context) {
-    if (action === "add") {
-      const toAdd = items && items.length > 0 ? items : text ? [text] : []
-      if (toAdd.length === 0) throw new Error("track: 'text' or 'items' is required for 'add'")
-      const store = await readStore(context.sessionID)
-      const first = store.items.length + 1
-      for (const entry of toAdd) store.items.push({ text: entry, status: "todo" })
-      await writeStore(context.sessionID, store)
-      if (toAdd.length === 1) return `added #${first} [ ] ${toAdd[0]} (${counts(store.items)})`
-      const lines = toAdd.map((entry, i) => `#${first + i} [ ] ${entry}`).join("\n")
-      return `added #${first}-${store.items.length} (${counts(store.items)})\n${lines}`
-    }
+  execute({ action, text, items, id }, context) {
+    return withLock(storeFile(context.sessionID), async () => {
+      if (action === "add") {
+        const toAdd = items && items.length > 0 ? items : text ? [text] : []
+        if (toAdd.length === 0) throw new Error("track: 'text' or 'items' is required for 'add'")
+        const store = await readStore(context.sessionID)
+        const first = store.items.length + 1
+        for (const entry of toAdd) store.items.push({ text: entry, status: "todo" })
+        await writeStore(context.sessionID, store)
+        if (toAdd.length === 1) return `added #${first} [ ] ${toAdd[0]} (${counts(store.items)})`
+        const lines = toAdd.map((entry, i) => `#${first + i} [ ] ${entry}`).join("\n")
+        return `added #${first}-${store.items.length} (${counts(store.items)})\n${lines}`
+      }
 
-    if (action === "start" || action === "doing") {
-      if (typeof id !== "number") throw new Error("track: numeric id is required for 'start'/'doing'")
-      const store = await readStore(context.sessionID)
-      const item = store.items[id - 1]
-      if (!item) throw new Error(`track: no item #${id}`)
-      item.status = "doing"
-      await writeStore(context.sessionID, store)
-      return `#${id} [.] ${item.text} (${counts(store.items)})`
-    }
+      if (action === "start" || action === "doing") {
+        if (typeof id !== "number") throw new Error("track: numeric id is required for 'start'/'doing'")
+        const store = await readStore(context.sessionID)
+        const item = store.items[id - 1]
+        if (!item) throw new Error(`track: no item #${id}`)
+        item.status = "doing"
+        await writeStore(context.sessionID, store)
+        return `#${id} [.] ${item.text} (${counts(store.items)})`
+      }
 
-    if (action === "done") {
-      if (typeof id !== "number") throw new Error("track: numeric id is required for 'done'")
-      const store = await readStore(context.sessionID)
-      const item = store.items[id - 1]
-      if (!item) throw new Error(`track: no item #${id}`)
-      item.status = "done"
-      await writeStore(context.sessionID, store)
-      return `#${id} [x] ${item.text} (${counts(store.items)})`
-    }
+      if (action === "done") {
+        if (typeof id !== "number") throw new Error("track: numeric id is required for 'done'")
+        const store = await readStore(context.sessionID)
+        const item = store.items[id - 1]
+        if (!item) throw new Error(`track: no item #${id}`)
+        item.status = "done"
+        await writeStore(context.sessionID, store)
+        return `#${id} [x] ${item.text} (${counts(store.items)})`
+      }
 
-    if (action === "list") {
-      const store = await readStore(context.sessionID)
-      return render(store.items)
-    }
+      if (action === "list") {
+        const store = await readStore(context.sessionID)
+        return render(store.items)
+      }
 
-    await fs.rm(storeFile(context.sessionID), { force: true })
-    return "cleared"
+      await fs.rm(storeFile(context.sessionID), { force: true })
+      return "cleared"
+    })
   },
 })

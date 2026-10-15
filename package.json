@@ -20,7 +20,7 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/track.test.ts"
+    "test": "node --test test/track.test.ts test/plugin.test.ts"
   },
   "dependencies": {
     "@opencode-ai/plugin": "1.4.7"
