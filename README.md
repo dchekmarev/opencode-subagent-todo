@@ -32,7 +32,8 @@ subagent gets a fresh, empty list.
   automatically. No per-agent configuration is required.
 - State lives in `$XDG_DATA_HOME/opencode/agent-todos/<sessionID>.json`
   (`~/.local/share/opencode/agent-todos/` by default), one file per session, written
-  atomically.
+  atomically. Files untouched for more than 7 days are pruned; an unreadable file is
+  moved to `<name>.json.corrupt-<ts>` rather than silently overwritten.
 - The plugin adds a one-line `track` hint via `experimental.chat.system.transform`, but
   skips it when the system prompt already mentions `todowrite` — so primary agents
   (which have `todowrite`) do not pay for the note.
@@ -90,12 +91,21 @@ is never duplicated in the model's context. Call `list` when you need the full s
 (e.g. to reorient, or after a context compaction). Passing `items: string[]` to `add`
 creates several steps in a single call.
 
+## Development
+
+```sh
+npm run typecheck    # tsc --noEmit
+npm test             # node:test against tool/track.ts
+```
+
 ## Layout
 
 ```
 tool/track.ts            the `track` custom tool
 plugins/opencode-todo.ts system-prompt hint plugin
+test/track.test.ts       unit tests
 install.sh               symlink installer
+tsconfig.json            typecheck config
 ```
 
 ## License

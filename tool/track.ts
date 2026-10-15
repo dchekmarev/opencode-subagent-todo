@@ -6,6 +6,8 @@ import * as path from "node:path"
 type Item = { text: string; status: "todo" | "doing" | "done" }
 type Store = { items: Item[] }
 
+const TTL_MS = 7 * 24 * 60 * 60 * 1000
+
 function storeDir(): string {
   const dataHome = process.env.XDG_DATA_HOME ?? path.join(os.homedir(), ".local", "share")
   return path.join(dataHome, "opencode", "agent-todos")
@@ -54,12 +56,33 @@ async function readStore(sessionID: string): Promise<Store> {
   }
 }
 
+async function prune(now = Date.now()): Promise<void> {
+  const dir = storeDir()
+  let entries: string[]
+  try {
+    entries = await fs.readdir(dir)
+  } catch {
+    return
+  }
+  await Promise.all(
+    entries.map(async (name) => {
+      if (!name.endsWith(".json") && !name.endsWith(".tmp") && !name.includes(".corrupt-")) return
+      const full = path.join(dir, name)
+      try {
+        const stat = await fs.stat(full)
+        if (now - stat.mtimeMs > TTL_MS) await fs.rm(full, { force: true })
+      } catch {}
+    }),
+  )
+}
+
 async function writeStore(sessionID: string, store: Store): Promise<void> {
   await fs.mkdir(storeDir(), { recursive: true })
   const file = storeFile(sessionID)
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`
   await fs.writeFile(tmp, JSON.stringify(store, null, 2), "utf8")
   await fs.rename(tmp, file)
+  await prune()
 }
 
 function render(items: Item[]): string {

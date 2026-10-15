@@ -18,7 +18,15 @@
     "README.md",
     "LICENSE"
   ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/track.test.ts"
+  },
   "dependencies": {
     "@opencode-ai/plugin": "1.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
   }
 }
