@@ -57,10 +57,44 @@ test("clear resets the session", async () => {
   assert.equal(await run("list", {}, "ses_clear"), "(empty)")
 })
 
-test("throws on unknown id and missing add text", async () => {
-  await assert.rejects(run("done", { id: 99 }, "ses_err"), /no item #99/)
-  await assert.rejects(run("add", {}, "ses_err"), /is required for 'add'/)
-})
+ test("throws on unknown id and missing add text", async () => {
+   await assert.rejects(run("done", { id: 99 }, "ses_err"), /no item #99/)
+   await assert.rejects(run("add", {}, "ses_err"), /is required for 'add'/)
+ })
+
+ test("remove renumbers and returns the full list", async () => {
+   await run("add", { items: ["a", "b", "c"] }, "ses_remove")
+   const res = await run("remove", { id: 2 }, "ses_remove")
+   assert.equal(res, "removed #2 (0/2 done)\n#1 [ ] a\n#2 [ ] c")
+ })
+
+ test("remove of unknown id throws", async () => {
+   await run("add", { text: "x" }, "ses_remove_err")
+   await assert.rejects(run("remove", { id: 2 }, "ses_remove_err"), /no item #2/)
+ })
+
+ test("edit changes text and preserves id and current status (todo/doing/done)", async () => {
+   await run("add", { items: ["a", "b", "c"] }, "ses_edit")
+   await run("done", { id: 2 }, "ses_edit")
+   await run("start", { id: 3 }, "ses_edit")
+   const t = await run("edit", { id: 1, text: "new a" }, "ses_edit")
+   assert.equal(t, "#1 [ ] new a (1/3 done, 1 doing)")
+   const d = await run("edit", { id: 2, text: "new b" }, "ses_edit")
+   assert.equal(d, "#2 [x] new b (1/3 done, 1 doing)")
+   const s = await run("edit", { id: 3, text: "new c" }, "ses_edit")
+   assert.equal(s, "#3 [.] new c (1/3 done, 1 doing)")
+   assert.equal(await run("list", {}, "ses_edit"), "#1 [ ] new a\n#2 [x] new b\n#3 [.] new c")
+ })
+
+ test("edit of unknown id throws", async () => {
+   await run("add", { text: "x" }, "ses_edit_err")
+   await assert.rejects(run("edit", { id: 2, text: "y" }, "ses_edit_err"), /no item #2/)
+ })
+
+ test("edit without text throws", async () => {
+   await run("add", { text: "x" }, "ses_edit_err2")
+   await assert.rejects(run("edit", { id: 1 }, "ses_edit_err2"), /'text' is required for 'edit'/)
+ })
 
 test("sanitizes session id to keep writes inside the store dir", async () => {
   await run("add", { text: "safe" }, "../../evil")

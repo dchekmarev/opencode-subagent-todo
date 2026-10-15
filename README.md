@@ -88,6 +88,8 @@ Other subagents (e.g. `general`, or any custom agent) receive `track` by default
 | `done`     | `id`            | marks the item done `[x]`; prints only that line              |
 | `list`     | —               | prints the full checklist `#id [marker] text` (or `(empty)`)  |
 | `clear`    | —               | deletes the session's list; prints `cleared`                  |
+| `remove`   | `id`            | removes item; returns confirmation + full renumbered list     |
+| `edit`     | `id`, `text`    | changes text preserving status; returns changed line          |
 
 Mutations return **only the changed line(s)** (plus a progress count) so the checklist
 is never duplicated in the model's context. Call `list` when you need the full state

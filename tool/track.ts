@@ -125,14 +125,15 @@ export default tool({
     "Use proactively for multi-step work (3+ steps) - a per-session checklist that keeps your plan out of the chat context; " +
     "skip trivial/one-step tasks. `add` steps (`text` or `items[]`), mark `start`/`doing` as you begin a step and `done` the moment it is " +
     "actually finished or verified - keep at most one `doing`, update immediately, never batch (by 1-based `id`). " +
-    "`list` to reorient (e.g. after compaction), `clear` to reset. " +
+    "`list` to reorient (e.g. after compaction), `clear` to reset. `remove` (id) removes item and returns confirmation + full renumbered list. " +
+    "`edit` (id, text) changes text preserving status; returns changed line. " +
     "Mutations return only the changed line(s); `list` returns the full checklist. " +
     "Markers: `[ ]` todo, `[.]` doing, `[x]` done. State is per session.",
   args: {
     action: tool.schema
-      .enum(["add", "start", "doing", "done", "list", "clear"])
-      .describe("add | start/doing | done | list | clear"),
-    text: tool.schema.string().optional().describe("One step to add; provide `text` or `items`."),
+      .enum(["add", "start", "doing", "done", "list", "clear", "remove", "edit"])
+      .describe("add | start/doing | done | list | clear | remove | edit"),
+    text: tool.schema.string().optional().describe("One step to add/edit; provide `text` or `items`."),
     items: tool.schema
       .array(tool.schema.string())
       .optional()
@@ -142,7 +143,7 @@ export default tool({
       .int()
       .positive()
       .optional()
-      .describe("1-based item id from `list`/`add` output (required for start/doing/done)."),
+      .describe("1-based item id from `list`/`add` output (required for start/doing/done/remove/edit)."),
   },
   execute({ action, text, items, id }, context) {
     return withLock(storeFile(context.sessionID), async () => {
@@ -183,8 +184,30 @@ export default tool({
         return render(store.items)
       }
 
-      await fs.rm(storeFile(context.sessionID), { force: true })
-      return "cleared"
-    })
-  },
-})
+       if (action === "remove") {
+         if (typeof id !== "number") throw new Error("track: numeric id is required for 'remove'")
+         const store = await readStore(context.sessionID)
+         const item = store.items[id - 1]
+         if (!item) throw new Error(`track: no item #${id}`)
+         store.items.splice(id - 1, 1)
+         await writeStore(context.sessionID, store)
+         return `removed #${id} (${counts(store.items)})\n${render(store.items)}`
+       }
+
+       if (action === "edit") {
+         if (typeof id !== "number") throw new Error("track: numeric id is required for 'edit'")
+         if (!text) throw new Error("track: 'text' is required for 'edit'")
+         const store = await readStore(context.sessionID)
+         const item = store.items[id - 1]
+         if (!item) throw new Error(`track: no item #${id}`)
+         item.text = text
+         await writeStore(context.sessionID, store)
+         const marker = item.status === "done" ? "[x]" : item.status === "doing" ? "[.]" : "[ ]"
+         return `#${id} ${marker} ${item.text} (${counts(store.items)})`
+       }
+
+       await fs.rm(storeFile(context.sessionID), { force: true })
+       return "cleared"
+     })
+   },
+ })
