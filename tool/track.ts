@@ -122,27 +122,27 @@ function counts(items: Item[]): string {
 
 export default tool({
   description:
-    "Per-session task checklist for tracking your own plan without spending context re-emitting it. " +
-    "States: [ ] todo, [.] in-progress (doing), [x] done. " +
-    "Use 'add' to add todo(s) (pass 'items' array to add several at once), 'start'/'doing' to set in-progress, " +
-    "'done' to finish, 'list' to reorient, 'clear' to reset. " +
-    "Mutations print ONLY the changed line(s) to avoid duplicating the list in context; call 'list' when you need the full checklist. " +
-    "State is isolated to this agent's own session (not shared with the parent or sibling agents).",
+    "Use proactively for multi-step work (3+ steps) - a per-session checklist that keeps your plan out of the chat context; " +
+    "skip trivial/one-step tasks. `add` steps (`text` or `items[]`), mark `start`/`doing` as you begin a step and `done` the moment it is " +
+    "actually finished or verified - keep at most one `doing`, update immediately, never batch (by 1-based `id`). " +
+    "`list` to reorient (e.g. after compaction), `clear` to reset. " +
+    "Mutations return only the changed line(s); `list` returns the full checklist. " +
+    "Markers: `[ ]` todo, `[.]` doing, `[x]` done. State is per session.",
   args: {
     action: tool.schema
       .enum(["add", "start", "doing", "done", "list", "clear"])
-      .describe("Operation to perform"),
-    text: tool.schema.string().optional().describe("Single item text (for 'add')"),
+      .describe("add | start/doing | done | list | clear"),
+    text: tool.schema.string().optional().describe("One step to add; provide `text` or `items`."),
     items: tool.schema
       .array(tool.schema.string())
       .optional()
-      .describe("Multiple item texts to add at once (for 'add')"),
+      .describe("Several steps in one call (batch add)."),
     id: tool.schema
       .number()
       .int()
       .positive()
       .optional()
-      .describe("Item id (required for 'start'/'doing'/'done')"),
+      .describe("1-based item id from `list`/`add` output (required for start/doing/done)."),
   },
   execute({ action, text, items, id }, context) {
     return withLock(storeFile(context.sessionID), async () => {
