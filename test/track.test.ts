@@ -119,3 +119,27 @@ test("prunes session files older than the TTL", async () => {
   await run("add", { text: "trigger prune" }, "ses_fresh")
   assert.ok(!(await fs.readdir(dir())).includes("ses_stale.json"))
 })
+
+test("start resets any other doing item to todo and reports reset", async () => {
+  await run("add", { items: ["a", "b"] }, "ses_single_doing")
+  await run("start", { id: 1 }, "ses_single_doing")
+  const res = await run("start", { id: 2 }, "ses_single_doing")
+  assert.equal(res, "#2 [.] b (0/2 done, 1 doing; reset #1 to todo)")
+  assert.equal(await run("list", {}, "ses_single_doing"), "#1 [ ] a\n#2 [.] b")
+})
+
+test("only one item remains doing after reset", async () => {
+  await run("add", { items: ["a", "b", "c"] }, "ses_single_remains")
+  await run("start", { id: 1 }, "ses_single_remains")
+  await run("start", { id: 2 }, "ses_single_remains")
+  const list = await run("list", {}, "ses_single_remains")
+  const doingCount = (list.match(/\[\.\]/g) || []).length
+  assert.equal(doingCount, 1)
+})
+
+test("starting the same item twice is idempotent (no reset note)", async () => {
+  await run("add", { items: ["a", "b"] }, "ses_idem")
+  await run("start", { id: 1 }, "ses_idem")
+  const res1 = await run("start", { id: 1 }, "ses_idem")
+  assert.equal(res1, "#1 [.] a (0/2 done, 1 doing)")
+})

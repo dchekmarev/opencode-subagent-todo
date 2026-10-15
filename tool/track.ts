@@ -164,9 +164,29 @@ export default tool({
         const store = await readStore(context.sessionID)
         const item = store.items[id - 1]
         if (!item) throw new Error(`track: no item #${id}`)
+        const wasAlreadyDoing = item.status === "doing"
+        const resets: number[] = []
+        if (!wasAlreadyDoing) {
+          for (let i = 0; i < store.items.length; i++) {
+            const idx = i + 1
+            if (idx === id) continue
+            if (store.items[i].status === "doing") {
+              store.items[i].status = "todo"
+              resets.push(idx)
+            }
+          }
+        }
         item.status = "doing"
         await writeStore(context.sessionID, store)
-        return `#${id} [.] ${item.text} (${counts(store.items)})`
+        const countStr = counts(store.items)
+        let result: string
+        if (resets.length > 0) {
+          const resetNotes = resets.map((r) => `reset #${r} to todo`).join("; ")
+          result = `#${id} [.] ${item.text} (${countStr}; ${resetNotes})`
+        } else {
+          result = `#${id} [.] ${item.text} (${countStr})`
+        }
+        return result
       }
 
       if (action === "done") {

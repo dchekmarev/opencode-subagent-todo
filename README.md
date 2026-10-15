@@ -84,7 +84,7 @@ Other subagents (e.g. `general`, or any custom agent) receive `track` by default
 | action     | args            | result                                                          |
 | ---------- | --------------- | --------------------------------------------------------------- |
 | `add`      | `text` or `items` | appends todo(s) `[ ]`; prints only the added line(s)          |
-| `start`/`doing` | `id`       | sets item in-progress `[.]`; prints only that line            |
+| `start`/`doing` | `id`       | sets item in-progress `[.]`; at most one item can be in `doing` state at a time (if another is `doing`, it is reset to `todo` and the reset is reported in the output; starting an already `doing` item is idempotent); prints only that line |
 | `done`     | `id`            | marks the item done `[x]`; prints only that line              |
 | `list`     | —               | prints the full checklist `#id [marker] text` (or `(empty)`)  |
 | `clear`    | —               | deletes the session's list; prints `cleared`                  |
