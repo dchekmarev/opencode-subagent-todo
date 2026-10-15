@@ -8,6 +8,9 @@ type Store = { items: Item[] }
 
 const TTL_MS = 7 * 24 * 60 * 60 * 1000
 const PRUNE_INTERVAL_MS = 10 * 60 * 1000
+const MAX_TEXT_LENGTH = 500
+const FILE_MODE = 0o600
+const DIR_MODE = 0o700
 
 let lastPruneMs = 0
 let storeDirReady: string | null = null
@@ -29,6 +32,14 @@ function safeId(sessionID: string): string {
 
 function storeFile(sessionID: string): string {
   return path.join(storeDir(), `${safeId(sessionID)}.json`)
+}
+
+function normalizeText(value: string): string {
+  const text = value.trim()
+  if (text === "") throw new Error("track: text must not be empty")
+  if (text.length > MAX_TEXT_LENGTH)
+    throw new Error(`track: text exceeds ${MAX_TEXT_LENGTH} characters`)
+  return text
 }
 
 // opencode issues independent tool calls in parallel, so two `track` mutations can
@@ -108,12 +119,12 @@ async function prune(now = Date.now()): Promise<void> {
 async function writeStore(sessionID: string, store: Store): Promise<void> {
   const dir = storeDir()
   if (storeDirReady !== dir) {
-    await fs.mkdir(dir, { recursive: true })
+    await fs.mkdir(dir, { recursive: true, mode: DIR_MODE })
     storeDirReady = dir
   }
   const file = storeFile(sessionID)
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`
-  await fs.writeFile(tmp, JSON.stringify(store, null, 2), "utf8")
+  await fs.writeFile(tmp, JSON.stringify(store, null, 2), { encoding: "utf8", mode: FILE_MODE })
   await fs.rename(tmp, file)
   await prune()
 }
@@ -164,12 +175,13 @@ export default tool({
       if (action === "add") {
         const toAdd = items && items.length > 0 ? items : text ? [text] : []
         if (toAdd.length === 0) throw new Error("track: 'text' or 'items' is required for 'add'")
+        const entries = toAdd.map(normalizeText)
         const store = await readStore(context.sessionID)
         const first = store.items.length + 1
-        for (const entry of toAdd) store.items.push({ text: entry, status: "todo" })
+        for (const entry of entries) store.items.push({ text: entry, status: "todo" })
         await writeStore(context.sessionID, store)
-        if (toAdd.length === 1) return `added #${first} [ ] ${toAdd[0]} (${counts(store.items)})`
-        const lines = toAdd.map((entry, i) => `#${first + i} [ ] ${entry}`).join("\n")
+        if (entries.length === 1) return `added #${first} [ ] ${entries[0]} (${counts(store.items)})`
+        const lines = entries.map((entry, i) => `#${first + i} [ ] ${entry}`).join("\n")
         return `added #${first}-${store.items.length} (${counts(store.items)})\n${lines}`
       }
 
@@ -219,30 +231,34 @@ export default tool({
         return `${render(store.items)}\n(${counts(store.items)})`
       }
 
-       if (action === "remove") {
-         if (typeof id !== "number") throw new Error("track: numeric id is required for 'remove'")
-         const store = await readStore(context.sessionID)
-         const item = store.items[id - 1]
-         if (!item) throw new Error(`track: no item #${id}`)
-         store.items.splice(id - 1, 1)
-         await writeStore(context.sessionID, store)
-         return `removed #${id} (${counts(store.items)})\n${render(store.items)}`
-       }
+      if (action === "remove") {
+        if (typeof id !== "number") throw new Error("track: numeric id is required for 'remove'")
+        const store = await readStore(context.sessionID)
+        const item = store.items[id - 1]
+        if (!item) throw new Error(`track: no item #${id}`)
+        store.items.splice(id - 1, 1)
+        await writeStore(context.sessionID, store)
+        return `removed #${id} (${counts(store.items)})\n${render(store.items)}`
+      }
 
-       if (action === "edit") {
-         if (typeof id !== "number") throw new Error("track: numeric id is required for 'edit'")
-         if (!text) throw new Error("track: 'text' is required for 'edit'")
-         const store = await readStore(context.sessionID)
-         const item = store.items[id - 1]
-         if (!item) throw new Error(`track: no item #${id}`)
-         item.text = text
-         await writeStore(context.sessionID, store)
-         const marker = item.status === "done" ? "[x]" : item.status === "doing" ? "[.]" : "[ ]"
-         return `#${id} ${marker} ${item.text} (${counts(store.items)})`
-       }
+      if (action === "edit") {
+        if (typeof id !== "number") throw new Error("track: numeric id is required for 'edit'")
+        if (!text) throw new Error("track: 'text' is required for 'edit'")
+        const store = await readStore(context.sessionID)
+        const item = store.items[id - 1]
+        if (!item) throw new Error(`track: no item #${id}`)
+        item.text = normalizeText(text)
+        await writeStore(context.sessionID, store)
+        const marker = item.status === "done" ? "[x]" : item.status === "doing" ? "[.]" : "[ ]"
+        return `#${id} ${marker} ${item.text} (${counts(store.items)})`
+      }
 
-       await fs.rm(storeFile(context.sessionID), { force: true })
-       return "cleared"
-     })
+      if (action === "clear") {
+        await fs.rm(storeFile(context.sessionID), { force: true })
+        return "cleared"
+      }
+
+      throw new Error(`track: unknown action '${action}'`)
+    })
    },
  })

@@ -8,8 +8,14 @@ import track, { __resetPruneThrottle } from "../tool/track.ts"
 let dataHome: string
 const dir = () => path.join(dataHome, "opencode", "agent-todos")
 
-const run = (action: string, extra: Record<string, unknown> = {}, sessionID = "ses_test") =>
-  track.execute({ action, ...extra } as never, { sessionID } as never)
+const run = async (
+  action: string,
+  extra: Record<string, unknown> = {},
+  sessionID = "ses_test",
+): Promise<string> => {
+  const result = await track.execute({ action, ...extra } as never, { sessionID } as never)
+  return typeof result === "string" ? result : result.output
+}
 
 before(async () => {
   dataHome = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-todo-"))
@@ -184,4 +190,36 @@ test("starting the same item twice is idempotent (no reset note)", async () => {
   await run("start", { id: 1 }, "ses_idem")
   const res1 = await run("start", { id: 1 }, "ses_idem")
   assert.equal(res1, "#1 [.] a (0/2 done, 1 doing)")
+})
+
+test("unknown action throws instead of clearing the list", async () => {
+  await run("add", { text: "x" }, "ses_unknown_action")
+  await assert.rejects(run("bogus", {}, "ses_unknown_action"), /unknown action/)
+  assert.equal(await run("list", {}, "ses_unknown_action"), "#1 [ ] x\n(0/1 done)")
+})
+
+test("trims text and rejects empty or oversized input", async () => {
+  assert.equal(await run("add", { text: "  hi  " }, "ses_trim"), "added #1 [ ] hi (0/1 done)")
+  await assert.rejects(run("add", { text: "   " }, "ses_trim"), /must not be empty/)
+  await assert.rejects(run("add", { text: "x".repeat(501) }, "ses_trim"), /exceeds 500/)
+})
+
+test("writes the store file with 0600 permissions", async () => {
+  await run("add", { text: "perm" }, "ses_perm")
+  const stat = await fs.stat(path.join(dir(), "ses_perm.json"))
+  assert.equal(stat.mode & 0o777, 0o600)
+})
+
+test("batch add rejects an invalid item without a partial write", async () => {
+  await assert.rejects(run("add", { items: ["ok", "   "] }, "ses_batch_err"), /must not be empty/)
+  await assert.rejects(run("add", { items: ["ok", "x".repeat(501)] }, "ses_batch_err"), /exceeds 500/)
+  assert.equal(await run("list", {}, "ses_batch_err"), "(empty)")
+})
+
+test("edit trims text and rejects empty or oversized input", async () => {
+  await run("add", { text: "orig" }, "ses_edit_norm")
+  assert.equal(await run("edit", { id: 1, text: "  renamed  " }, "ses_edit_norm"), "#1 [ ] renamed (0/1 done)")
+  await assert.rejects(run("edit", { id: 1, text: "  " }, "ses_edit_norm"), /must not be empty/)
+  await assert.rejects(run("edit", { id: 1, text: "x".repeat(501) }, "ses_edit_norm"), /exceeds 500/)
+  assert.equal(await run("list", {}, "ses_edit_norm"), "#1 [ ] renamed\n(0/1 done)")
 })
