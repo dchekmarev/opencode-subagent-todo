@@ -33,8 +33,9 @@ subagent gets a fresh, empty list.
 - State lives in `$XDG_DATA_HOME/opencode/agent-todos/<sessionID>.json`
   (`~/.local/share/opencode/agent-todos/` by default), one file per session, written
   atomically.
-- The plugin uses the `experimental.chat.system.transform` hook to add the guidance.
-  For primary agents the note is a no-op, since `todowrite` is already available.
+- The plugin adds a one-line `track` hint via `experimental.chat.system.transform`, but
+  skips it when the system prompt already mentions `todowrite` — so primary agents
+  (which have `todowrite`) do not pay for the note.
 
 ## Install
 
