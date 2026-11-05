@@ -38,7 +38,7 @@
     "prepublishOnly": "npm run typecheck && npm test"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "1.19.3"
+    "@opencode-ai/plugin": "1.19.5"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
